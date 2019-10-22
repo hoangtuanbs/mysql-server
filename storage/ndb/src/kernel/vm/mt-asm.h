@@ -73,6 +73,48 @@ cpu_pause()
   asm volatile ("rep;nop");
 }
 
+#elif defined(__arm__) /* arm */
+
+#define NDB_HAVE_MB
+#define NDB_HAVE_RMB
+#define NDB_HAVE_WMB
+#define NDB_HAVE_READ_BARRIER_DEPENDS
+#define NDB_HAVE_XCNG
+#define NDB_HAVE_CPU_PAUSE
+
+/* Memory barriers, these definitions are for arm. */
+#define mb()    asm volatile("dmb ish":::"memory")
+#define rmb()   asm volatile("dmb ish" ::: "memory")
+#define wmb()   asm volatile("dmb ishst" ::: "memory")
+#define read_barrier_depends()  do {} while(0)
+
+static
+inline
+int
+xcng(volatile unsigned * addr, int val)
+{
+  int ret;
+  int temp;
+
+  asm volatile (
+    "1: ldrexh  %0, [%3]\n"
+    "   strexh  %1, %2, [%3]\n"
+    "   teq     %1, #0\n"
+    "   bne     1b"
+      : "=&r" (ret), "=&r" (temp)
+      : "r" (val), "r" (*(volatile unsigned int *)addr)
+      : "memory", "cc");
+  return ret;
+}
+
+static
+inline
+void
+cpu_pause()
+{
+  asm volatile ("wfe;nop");
+}
+
 #elif defined(__sparc__)
 
 #define NDB_HAVE_MB
@@ -180,7 +222,7 @@ xcng(volatile unsigned * addr, int val)
 #error "Unsupported architecture (sun studio)"
 #endif
 
-#if defined(__x86_64) || defined (__i386) || defined(__sparc)
+#if defined(__x86_64) || defined (__i386) || defined(__sparc) || defined(__arm)
 /**
  * we should probably use assembler for x86 aswell...
  *   but i'm not really sure how you do this in sun-studio :-(
